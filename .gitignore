@@ -1,0 +1,16 @@
+# 编译产物
+bin/
+obj/
+publish/
+*.exe
+*.pdb
+*.user
+
+# 图标（自行放置）
+src/app.ico
+
+# 系统与编辑器
+.vs/
+.vscode/
+Thumbs.db
+.DS_Store
