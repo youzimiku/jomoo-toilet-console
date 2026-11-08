@@ -12,9 +12,6 @@ namespace JomooRemote
 {
     public partial class MainWindow : Window
     {
-        const int IdleSeconds = 30;
-        const int PollMs = 500;
-
         static readonly Brush TextNormal = new SolidColorBrush(Color.FromRgb(0xDC, 0xE9, 0xF3));
         static readonly Brush TextAccent = new SolidColorBrush(Color.FromRgb(0x57, 0xC8, 0xFF));
         static readonly Brush TextGreen = new SolidColorBrush(Color.FromRgb(0x86, 0xD8, 0xB2));
@@ -41,6 +38,10 @@ namespace JomooRemote
         bool _lastCover, _lastRing;
         int _coverDir, _ringDir;
 
+        AppSettings _settings = new AppSettings();
+        AppSettings _draft;
+        bool _syncUi;
+
         public bool NoConnect { get; set; }
         public int DemoState { get; set; }
         public bool SelfTestReconnect { get; set; }
@@ -49,8 +50,19 @@ namespace JomooRemote
         {
             InitializeComponent();
 
+            var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            string verText = "v" + ver.Major + "." + ver.Minor;
+            VersionText.Text = verText;
+
+            _settings = AppSettings.Load(out var loadNote);
+            ApplyRuntimeSettings(_settings);
+            Log(verText + " 启动 设置 idle=" + _settings.IdleSeconds + " poll=" + _settings.PollMs
+                + " bind=" + _settings.DeviceMode + " opacity=" + _settings.Opacity + " scale=" + _settings.Scale);
+
             Loaded += async (s, e) =>
             {
+                Hint(IdleHint());
+                if (!string.IsNullOrEmpty(loadNote)) ShowSettingsHintSafe(loadNote);
                 if (NoConnect) { ApplyDemo(); return; }
                 await EnsureConnectedAsync(90000);
                 if (SelfTestReconnect) await RunReconnectSelfTest();
@@ -66,6 +78,12 @@ namespace JomooRemote
             _tick = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(200) };
             _tick.Tick += (s, e) => OnTick();
             _tick.Start();
+
+            PreviewKeyDown += (s, e) =>
+            {
+                if (SettingsLayer.Visibility != Visibility.Visible) return;
+                if (e.Key == Key.Escape) { CloseSettings(); e.Handled = true; }
+            };
         }
 
         async Task RunReconnectSelfTest()
@@ -165,6 +183,8 @@ namespace JomooRemote
             }
 
             ApplyState(st);
+
+            if (DemoState == 9) OpenSettings();
         }
 
         // ------------------------------------------------------------ 连接与会话
@@ -203,7 +223,9 @@ namespace JomooRemote
             ConnDot.Fill = new SolidColorBrush(Color.FromRgb(0xFE, 0xBC, 0x2E));
             ConnText.Text = "正在连接…";
             ConnText.Foreground = new SolidColorBrush(Color.FromRgb(0xF4, 0xDF, 0xA8));
-            ConnSub.Text = "· 扫描 JOMOO_SMART";
+            ConnSub.Text = _settings.DeviceMode == "mac" && !string.IsNullOrEmpty(_settings.TargetMac)
+                ? "· 锁定 " + _settings.TargetMac
+                : "· 扫描 JOMOO_SMART";
             ConnSub.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA9, 0x6A));
             ConnAction.Visibility = Visibility.Collapsed;
             ReadoutCard.Opacity = 0.45;
@@ -220,7 +242,7 @@ namespace JomooRemote
             ConnDot.Fill = new SolidColorBrush(Color.FromRgb(0x3E, 0xE0, 0x8F));
             ConnText.Text = "已连接";
             ConnText.Foreground = new SolidColorBrush(Color.FromRgb(0xBE, 0xEB, 0xD4));
-            ConnSub.Text = "· 空闲 " + IdleLeft() + " s";
+            ConnSub.Text = IdleText();
             ConnSub.Foreground = new SolidColorBrush(Color.FromRgb(0x7F, 0xB7, 0x9B));
             ConnAction.Visibility = Visibility.Visible;
             ConnActionText.Text = "断开";
@@ -235,7 +257,7 @@ namespace JomooRemote
             ConnDot.Fill = new SolidColorBrush(Color.FromRgb(0xF8, 0x71, 0x71));
             ConnText.Text = "未连接";
             ConnText.Foreground = new SolidColorBrush(Color.FromRgb(0xF3, 0xB8, 0xB8));
-            ConnSub.Text = "· 空闲 " + IdleSeconds + " s 已断开";
+            ConnSub.Text = _settings.IdleEnabled ? "· 空闲 " + _settings.IdleSeconds + " s 已断开" : "· 已断开 · 不自动断开";
             ConnSub.Foreground = new SolidColorBrush(Color.FromRgb(0xB9, 0x8F, 0x8F));
             ConnAction.Visibility = Visibility.Visible;
             ConnActionText.Text = "重新连接";
@@ -265,6 +287,11 @@ namespace JomooRemote
 
             var ble = new JomooBle { Address = JomooBle.LoadAddress() };
             ble.Log = Log;
+            if (_settings.DeviceMode == "mac")
+            {
+                var mac = AppSettings.ParseMac(_settings.TargetMac);
+                if (mac != 0) { ble.BindMac = true; ble.BindAddress = mac; }
+            }
             _ble = ble;
 
             bool ok = false;
@@ -401,7 +428,7 @@ namespace JomooRemote
                     catch { }
                 }
 
-                int rest = PollMs - (int)sw.ElapsedMilliseconds;
+                int rest = _settings.PollMs - (int)sw.ElapsedMilliseconds;
                 if (rest > 0)
                 {
                     try { await Task.Delay(rest, ct); }
@@ -419,7 +446,7 @@ namespace JomooRemote
             if (_connected)
             {
                 ReadoutCard.Opacity = 1.0;
-                ConnSub.Text = "· 空闲 " + IdleLeft() + " s";
+                ConnSub.Text = IdleText();
             }
 
             bool cov = s.Cover != 0, ring = s.Ring != 0;
@@ -610,16 +637,30 @@ namespace JomooRemote
 
         int IdleLeft()
         {
+            if (!_settings.IdleEnabled) return -1;
             double idle = (DateTime.Now - _lastAction).TotalSeconds;
-            return Math.Max(0, IdleSeconds - (int)idle);
+            return Math.Max(0, _settings.IdleSeconds - (int)idle);
+        }
+
+        string IdleText()
+        {
+            if (!_settings.IdleEnabled) return "· 不自动断开";
+            return "· 空闲 " + IdleLeft() + " s";
+        }
+
+        string IdleHint()
+        {
+            if (!_settings.IdleEnabled) return "启动后自动连接，连接后不自动断开";
+            return "启动后自动连接，空闲 " + _settings.IdleSeconds + " 秒自动断开";
         }
 
         void OnTick()
         {
             if (!_connected) return;
             int left = IdleLeft();
+            if (left < 0) { ConnSub.Text = "· 不自动断开"; return; }
             ConnSub.Text = "· 空闲 " + left + " s";
-            if (left == 0) _ = DisconnectAsync("空闲 30 秒，已自动断开");
+            if (left == 0) _ = DisconnectAsync("空闲 " + _settings.IdleSeconds + " 秒，已自动断开");
         }
 
         // ------------------------------------------------------------ 动作
@@ -734,15 +775,334 @@ namespace JomooRemote
             await EnsureConnectedAsync(60000);
         }
 
-        // ------------------------------------------------------------ 杂项
+        // ------------------------------------------------------------ 界面设置
 
-        static readonly string LogPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "jomoo_app.log");
-
-        static void Log(string msg)
+        void ApplyRuntimeSettings(AppSettings s)
         {
+            Backdrop.Opacity = s.Opacity;
+            ApplyScale(s.Scale);
+            LogDirText.Text = "%APPDATA%\\JomooRemote\\logs";
+        }
+
+        /// <summary>整体缩放：同步窗口宽高并夹回工作区；放不下返回 false</summary>
+        bool ApplyScale(double scale)
+        {
+            var wa = SystemParameters.WorkArea;
+            double w = 1240 * scale, h = 800 * scale;
+            if (w > wa.Width + 0.5 || h > wa.Height + 0.5) return false;
+
+            ScaleHost.LayoutTransform = new ScaleTransform(scale, scale);
+            Width = w;
+            Height = h;
+
+            double left = Left, top = Top;
+            if (double.IsNaN(left) || double.IsNaN(top)) return true;
+            if (left + w > wa.Right) left = wa.Right - w;
+            if (top + h > wa.Bottom) top = wa.Bottom - h;
+            if (left < wa.Left) left = wa.Left;
+            if (top < wa.Top) top = wa.Top;
+            Left = left;
+            Top = top;
+            return true;
+        }
+
+        void OpenSettings()
+        {
+            _draft = _settings.Clone();
+            SettingsHint.Text = "";
+            DeviceSheet.Visibility = Visibility.Collapsed;
+            SyncSettingsUi();
+            SettingsLayer.Visibility = Visibility.Visible;
+            Log("打开设置面板");
+        }
+
+        void CloseSettings()
+        {
+            SettingsLayer.Visibility = Visibility.Collapsed;
+            DeviceSheet.Visibility = Visibility.Collapsed;
+            _draft = null;
+        }
+
+        void SyncSettingsUi()
+        {
+            if (_draft == null) return;
+            _syncUi = true;
             try
             {
-                System.IO.File.AppendAllText(LogPath, DateTime.Now.ToString("HH:mm:ss.fff") + "  " + msg + "\r\n");
+                IdleSlider.Value = _draft.IdleSeconds;
+                IdleVal.Text = _draft.IdleEnabled ? _draft.IdleSeconds + " s" : "不自动断开";
+                PollSlider.Value = _draft.PollMs;
+                PollVal.Text = _draft.PollMs + " ms";
+                OpacitySlider.Value = Math.Round(_draft.Opacity * 100);
+                OpacityVal.Text = Math.Round(_draft.Opacity * 100) + "%";
+
+                var cells = new[] { ScaleCell0, ScaleCell1, ScaleCell2, ScaleCell3 };
+                var texts = new[] { ScaleText0, ScaleText1, ScaleText2, ScaleText3 };
+                int idx = _draft.ScaleIndex;
+                for (int i = 0; i < cells.Length; i++) SetSeg(cells[i], texts[i], i == idx);
+
+                bool mac = _draft.DeviceMode == "mac";
+                SetSeg(BindAutoCell, BindAutoText, !mac);
+                SetSeg(BindMacCell, BindMacText, mac);
+                BindDesc.Text = mac ? "按 MAC 锁定设备，扫不到时回落自动并写日志"
+                                    : "自动扫描首个 JOMOO_SMART 设备";
+                TargetBox.Opacity = mac ? 1.0 : 0.45;
+                TargetText.Text = string.IsNullOrEmpty(_draft.TargetMac) ? "未指定 · 点此选择设备" : _draft.TargetMac;
+                TargetText.Foreground = string.IsNullOrEmpty(_draft.TargetMac) ? GrayText : TextNormal;
+
+                LogTrack.Background = _draft.Logging ? Accent(0x22) : Neutral(0x22);
+                LogTrack.BorderBrush = _draft.Logging ? Accent(0x3D) : Neutral(0x1F);
+                LogKnob.Fill = _draft.Logging ? TextAccent : GrayIcon;
+                LogKnob.HorizontalAlignment = _draft.Logging ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+                LogKnob.Margin = _draft.Logging ? new Thickness(0, 0, 2, 0) : new Thickness(2, 0, 0, 0);
+            }
+            finally { _syncUi = false; }
+        }
+
+        static void SetSeg(System.Windows.Controls.Border cell, System.Windows.Controls.TextBlock text, bool on)
+        {
+            cell.Background = on
+                ? new SolidColorBrush(Color.FromArgb(0x17, 0x57, 0xC8, 0xFF))
+                : new SolidColorBrush(Colors.Transparent);
+            cell.BorderBrush = on
+                ? new SolidColorBrush(Color.FromArgb(0x3D, 0x57, 0xC8, 0xFF))
+                : new SolidColorBrush(Colors.Transparent);
+            text.Foreground = on
+                ? new SolidColorBrush(Color.FromRgb(0x8F, 0xDC, 0xFA))
+                : new SolidColorBrush(Color.FromRgb(0x8F, 0xA6, 0xB8));
+        }
+
+        void IdleChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_draft == null || _syncUi) return;
+            int v = (int)Math.Round(e.NewValue);
+            _draft.IdleSeconds = v;
+            IdleVal.Text = v >= AppSettings.IdleNever ? "不自动断开" : v + " s";
+            SettingsHint.Text = v < 10 ? "频繁断开会增加重连等待" : "";
+        }
+
+        void PollChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_draft == null || _syncUi) return;
+            int v = (int)Math.Round(e.NewValue);
+            _draft.PollMs = v;
+            PollVal.Text = v + " ms";
+            SettingsHint.Text = v < 400 ? "低于 400 ms 时设备回帧可能来不及，易丢帧" : "";
+        }
+
+        void OpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_draft == null || _syncUi) return;
+            _draft.Opacity = Math.Round(e.NewValue) / 100.0;
+            OpacityVal.Text = Math.Round(e.NewValue) + "%";
+            SettingsHint.Text = e.NewValue < 85 ? "再降低会让背景与桌面混色，影响可读性" : "";
+        }
+
+        void ScaleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender) || _draft == null) return;
+            var f = sender as FrameworkElement;
+            if (f == null || string.IsNullOrEmpty(f.Uid)) return;
+            int idx = int.Parse(f.Uid);
+            if (idx < 0 || idx >= AppSettings.Scales.Length) return;
+            _draft.Scale = AppSettings.Scales[idx];
+            SyncSettingsUi();
+            SettingsHint.Text = "";
+        }
+
+        void BindAutoClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender) || _draft == null) return;
+            _draft.DeviceMode = "auto";
+            SyncSettingsUi();
+            SettingsHint.Text = "";
+        }
+
+        void BindMacClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender) || _draft == null) return;
+            _draft.DeviceMode = "mac";
+            SyncSettingsUi();
+            SettingsHint.Text = string.IsNullOrEmpty(_draft.TargetMac) ? "点下方选择要锁定的设备" : "";
+        }
+
+        async void TargetBoxClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender) || _draft == null) return;
+            DeviceSheet.Visibility = Visibility.Visible;
+            DevicesList.Children.Clear();
+            ScanState.Text = "扫描中… 最长 6 秒";
+
+            System.Collections.Generic.List<(string Name, string Mac, ulong Address, short Rssi)> hits;
+            try { hits = await JomooBle.ScanAllAsync(6000); }
+            catch (Exception ex)
+            {
+                ScanState.Text = "扫描异常：" + ex.Message;
+                return;
+            }
+
+            DevicesList.Children.Clear();
+            if (hits.Count == 0)
+            {
+                ScanState.Text = "未扫描到 JOMOO_SMART 设备 · 确认马桶通电并在范围内";
+                return;
+            }
+
+            ScanState.Text = "扫描到 " + hits.Count + " 台设备，点击选择";
+            foreach (var h in hits)
+            {
+                var row = new System.Windows.Controls.Border
+                {
+                    Height = 44,
+                    CornerRadius = new CornerRadius(10),
+                    Margin = new Thickness(0, 0, 0, 8),
+                    BorderThickness = new Thickness(1),
+                    Cursor = Cursors.Hand,
+                    Background = Neutral(0x0C),
+                    BorderBrush = Neutral(0x14),
+                    Tag = h.Mac
+                };
+                var g = new System.Windows.Controls.Grid { Margin = new Thickness(12, 0, 12, 0) };
+                g.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = h.Name, FontSize = 12, Foreground = TextNormal,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                g.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = h.Mac + " · " + h.Rssi + " dBm", FontSize = 11, Foreground = GrayText,
+                    VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right
+                });
+                row.Child = g;
+                row.PreviewMouseLeftButtonDown += (s, ev) => { _downOn = row; };
+                row.MouseLeftButtonUp += DeviceItemClick;
+                DevicesList.Children.Add(row);
+            }
+        }
+
+        void DeviceItemClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender) || _draft == null) return;
+            var f = sender as FrameworkElement;
+            _draft.TargetMac = (f != null && f.Tag is string) ? (string)f.Tag : "";
+            _draft.DeviceMode = "mac";
+            DeviceSheet.Visibility = Visibility.Collapsed;
+            SyncSettingsUi();
+            SettingsHint.Text = "已选定 " + _draft.TargetMac + "，保存后生效";
+        }
+
+        void DeviceSheetCancelClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender)) return;
+            DeviceSheet.Visibility = Visibility.Collapsed;
+        }
+
+        void LogToggleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender) || _draft == null) return;
+            _draft.Logging = !_draft.Logging;
+            SyncSettingsUi();
+            SettingsHint.Text = _draft.Logging ? "" : "关闭后不再写入本地日志";
+        }
+
+        void OpenLogDirClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender)) return;
+            try
+            {
+                System.IO.Directory.CreateDirectory(AppSettings.LogDir);
+                Process.Start(new ProcessStartInfo("explorer.exe", "\"" + AppSettings.LogDir + "\"") { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                SettingsHint.Text = "打开目录失败：" + ex.Message;
+            }
+        }
+
+        void ResetSettingsClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender)) return;
+            _draft = new AppSettings();
+            _draft.Clamp();
+            SyncSettingsUi();
+            SettingsHint.Text = "已填入默认值，点「保存」后生效";
+        }
+
+        void SaveSettingsClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender) || _draft == null) return;
+
+            var s = _draft.Clone();
+            s.Clamp();
+
+            if (s.DeviceMode == "mac" && AppSettings.ParseMac(s.TargetMac) == 0)
+            {
+                SettingsHint.Text = "「指定」需要先选择一个设备，或切回「自动」";
+                return;
+            }
+
+            if (!ApplyScale(s.Scale))
+            {
+                ApplyScale(_settings.Scale);
+                _draft.Scale = _settings.Scale;
+                SyncSettingsUi();
+                SettingsHint.Text = "当前缩放超出屏幕工作区，已回退到上一档";
+                return;
+            }
+
+            var oldBind = _settings.DeviceMode + "|" + _settings.TargetMac;
+            _settings = s;
+            _settings.Save();
+            Backdrop.Opacity = s.Opacity;
+            if (_connected) ConnSub.Text = IdleText();
+            Hint("设置已保存 · " + (s.IdleEnabled ? "空闲 " + s.IdleSeconds + " s 自动断开" : "不自动断开")
+                 + " · 轮询 " + s.PollMs + " ms");
+            Log("设置已保存 idle=" + s.IdleSeconds + " poll=" + s.PollMs + " bind=" + s.DeviceMode
+                + " mac=" + s.TargetMac + " opacity=" + s.Opacity + " scale=" + s.Scale + " logging=" + s.Logging);
+            CloseSettings();
+
+            if (oldBind != s.DeviceMode + "|" + s.TargetMac && _connected)
+                _ = DisconnectAsync("目标设备设置已变更，已断开 · 点按钮按新设置重连");
+        }
+
+        void CancelSettingsClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender)) return;
+            CloseSettings();
+        }
+
+        void SettingsCloseClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender)) return;
+            CloseSettings();
+        }
+
+        void SettingsMaskClick(object sender, MouseButtonEventArgs e)
+        {
+            CloseSettings();
+        }
+
+        void GearClick(object sender, MouseButtonEventArgs e)
+        {
+            if (!Arm(sender)) return;
+            OpenSettings();
+        }
+
+        void ShowSettingsHintSafe(string text)
+        {
+            if (SettingsHint != null) SettingsHint.Text = text;
+        }
+
+        // ------------------------------------------------------------ 杂项
+
+        void Log(string msg)
+        {
+            if (!_settings.Logging) return;
+            try
+            {
+                System.IO.Directory.CreateDirectory(AppSettings.LogDir);
+                System.IO.File.AppendAllText(AppSettings.LogFile,
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "  " + msg + "\r\n");
             }
             catch { }
         }
@@ -757,7 +1117,7 @@ namespace JomooRemote
 
         void DragWindow(object sender, MouseButtonEventArgs e)
         {
-            if (e.OriginalSource is DependencyObject src && IsInside(src, CloseButton)) return;
+            if (e.OriginalSource is DependencyObject src && (IsInside(src, CloseButton) || IsInside(src, GearButton))) return;
             if (e.ButtonState == MouseButtonState.Pressed) DragMove();
         }
 

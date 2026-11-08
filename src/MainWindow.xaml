@@ -66,16 +66,88 @@
         </Trigger>
       </Style.Triggers>
     </Style>
+
+    <Style x:Key="GlassSlider" TargetType="Slider">
+      <Setter Property="Height" Value="16" />
+      <Setter Property="IsMoveToPointEnabled" Value="True" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Slider">
+            <Grid VerticalAlignment="Center">
+              <Border Height="4" CornerRadius="2" Background="#22FFFFFF" VerticalAlignment="Center" />
+              <Track x:Name="PART_Track" VerticalAlignment="Center">
+                <Track.DecreaseRepeatButton>
+                  <RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False">
+                    <RepeatButton.Template>
+                      <ControlTemplate TargetType="RepeatButton">
+                        <Border Height="4" CornerRadius="2" Background="#57C8FF" VerticalAlignment="Center" />
+                      </ControlTemplate>
+                    </RepeatButton.Template>
+                  </RepeatButton>
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                  <Thumb Width="12" Height="12" VerticalAlignment="Center">
+                    <Thumb.Template>
+                      <ControlTemplate TargetType="Thumb">
+                        <Ellipse Width="12" Height="12" Fill="#EAF6FF" />
+                      </ControlTemplate>
+                    </Thumb.Template>
+                  </Thumb>
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                  <RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False">
+                    <RepeatButton.Template>
+                      <ControlTemplate TargetType="RepeatButton">
+                        <Border Height="4" Background="Transparent" VerticalAlignment="Center" />
+                      </ControlTemplate>
+                    </RepeatButton.Template>
+                  </RepeatButton>
+                </Track.IncreaseRepeatButton>
+              </Track>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="SegCell" TargetType="Border">
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="#00FFFFFF" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="#1CFFFFFF" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style x:Key="PanelBtn" TargetType="Border">
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Background" Value="#0FFFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#1FFFFFFF" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="18,0" />
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="#1CFFFFFF" />
+          <Setter Property="BorderBrush" Value="#2EFFFFFF" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
   </Window.Resources>
 
-  <Border CornerRadius="28" BorderThickness="1" BorderBrush="#26FFFFFF">
-    <Border.Background>
-      <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#FF14202C" Offset="0" />
-        <GradientStop Color="#FF0B1219" Offset="0.55" />
-        <GradientStop Color="#FF070A0E" Offset="1" />
-      </LinearGradientBrush>
-    </Border.Background>
+  <Grid x:Name="ScaleHost">
+    <Border x:Name="Backdrop" CornerRadius="28" BorderThickness="1" BorderBrush="#26FFFFFF">
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+          <GradientStop Color="#FF14202C" Offset="0" />
+          <GradientStop Color="#FF0B1219" Offset="0.55" />
+          <GradientStop Color="#FF070A0E" Offset="1" />
+        </LinearGradientBrush>
+      </Border.Background>
+    </Border>
 
     <Grid>
       <Grid Margin="24,0,24,20">
@@ -95,6 +167,8 @@
             <Border CornerRadius="9" BorderThickness="1" BorderBrush="#1EFFFFFF" Padding="8,2" Margin="14,0,0,0" VerticalAlignment="Center">
               <TextBlock x:Name="TagModel" Text="型号待识别" FontSize="10" Foreground="#8FA6B8" />
             </Border>
+            <TextBlock x:Name="VersionText" Text="v1.1" FontSize="10" Foreground="#6F8698"
+                       Margin="10,1,0,0" VerticalAlignment="Center" />
           </StackPanel>
 
           <Border x:Name="CloseButton" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,0,0"
@@ -104,6 +178,23 @@
             <Canvas Width="12" Height="12">
               <Line X1="0" Y1="0" X2="12" Y2="12" Stroke="#AFC4D4" StrokeThickness="1.4" />
               <Line X1="12" Y1="0" X2="0" Y2="12" Stroke="#AFC4D4" StrokeThickness="1.4" />
+            </Canvas>
+          </Border>
+
+          <Border x:Name="GearButton" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,58,0"
+                  Width="34" Height="34" CornerRadius="10" Background="#14FFFFFF"
+                  BorderThickness="1" BorderBrush="#1FFFFFFF" Cursor="Hand"
+                  PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="GearClick">
+            <Canvas Width="14" Height="14">
+              <Ellipse Width="9" Height="9" Stroke="#AFC4D4" StrokeThickness="1.2" Canvas.Left="2.5" Canvas.Top="2.5" />
+              <Line X1="11.8" Y1="7" X2="13.6" Y2="7" Stroke="#AFC4D4" StrokeThickness="1.6" />
+              <Line X1="10.4" Y1="10.4" X2="11.7" Y2="11.7" Stroke="#AFC4D4" StrokeThickness="1.6" />
+              <Line X1="7" Y1="11.8" X2="7" Y2="13.6" Stroke="#AFC4D4" StrokeThickness="1.6" />
+              <Line X1="3.6" Y1="10.4" X2="2.3" Y2="11.7" Stroke="#AFC4D4" StrokeThickness="1.6" />
+              <Line X1="2.2" Y1="7" X2="0.4" Y2="7" Stroke="#AFC4D4" StrokeThickness="1.6" />
+              <Line X1="3.6" Y1="3.6" X2="2.3" Y2="2.3" Stroke="#AFC4D4" StrokeThickness="1.6" />
+              <Line X1="7" Y1="2.2" X2="7" Y2="0.4" Stroke="#AFC4D4" StrokeThickness="1.6" />
+              <Line X1="10.4" Y1="3.6" X2="11.7" Y2="2.3" Stroke="#AFC4D4" StrokeThickness="1.6" />
             </Canvas>
           </Border>
         </Grid>
@@ -503,6 +594,213 @@
             </Border>
           </Grid>
         </Grid>
+
+        <Grid x:Name="SettingsLayer" Grid.RowSpan="2" Visibility="Collapsed">
+          <Border Background="#66000000" MouseLeftButtonUp="SettingsMaskClick" />
+
+          <Border x:Name="SettingsPanel" Width="620" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  CornerRadius="20" BorderThickness="1" BorderBrush="#18FFFFFF">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#FF1F2A33" Offset="0" />
+                <GradientStop Color="#FF12181F" Offset="1" />
+              </LinearGradientBrush>
+            </Border.Background>
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="56" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="64" />
+              </Grid.RowDefinitions>
+
+              <Grid Grid.Row="0" Margin="24,0,16,0">
+                <TextBlock Text="设置" FontSize="14" Foreground="#DCE9F3" VerticalAlignment="Center" />
+                <Border HorizontalAlignment="Right" VerticalAlignment="Center" Width="26" Height="26" CornerRadius="8"
+                        Background="#14FFFFFF" BorderThickness="1" BorderBrush="#1FFFFFFF" Cursor="Hand"
+                        PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="SettingsCloseClick">
+                  <Canvas Width="9" Height="9">
+                    <Line X1="0" Y1="0" X2="9" Y2="9" Stroke="#AFC4D4" StrokeThickness="1.3" />
+                    <Line X1="9" Y1="0" X2="0" Y2="9" Stroke="#AFC4D4" StrokeThickness="1.3" />
+                  </Canvas>
+                </Border>
+              </Grid>
+
+              <StackPanel Grid.Row="1" Margin="24,0,24,0">
+                <TextBlock Text="显示与布局" FontSize="11" Foreground="#7C93A6" Margin="0,4,0,10" />
+
+                <Grid Height="56">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="窗口不透明度" FontSize="13" Foreground="#DCE9F3" />
+                    <TextBlock Text="仅作用于窗口背景玻璃层，不影响文字与状态色" FontSize="11" Foreground="#6F8698" Margin="0,5,0,0" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Slider x:Name="OpacitySlider" Width="166" Minimum="70" Maximum="100" Value="100"
+                            TickFrequency="5" IsSnapToTickEnabled="True" Style="{StaticResource GlassSlider}"
+                            ValueChanged="OpacityChanged" />
+                    <TextBlock x:Name="OpacityVal" Text="100%" Width="88" Margin="12,0,0,0" TextAlignment="Right" FontSize="12"
+                               Foreground="#DCE9F3" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+                <Border Height="1" Background="#0FFFFFFF" />
+
+                <Grid Height="56">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="界面缩放" FontSize="13" Foreground="#DCE9F3" />
+                    <TextBlock Text="整体缩放，窗口宽高同步变化并重新居中" FontSize="11" Foreground="#6F8698" Margin="0,5,0,0" />
+                  </StackPanel>
+                  <Border HorizontalAlignment="Right" VerticalAlignment="Center" Width="228" Height="32" CornerRadius="10"
+                          Background="#0CFFFFFF" BorderThickness="1" BorderBrush="#12FFFFFF" Padding="3">
+                    <UniformGrid Rows="1" Columns="4">
+                      <Border x:Name="ScaleCell0" Style="{StaticResource SegCell}" Uid="0" BorderThickness="1" BorderBrush="Transparent"
+                              PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="ScaleClick">
+                        <TextBlock x:Name="ScaleText0" Text="100%" FontSize="12" Foreground="#8FA6B8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <Border x:Name="ScaleCell1" Style="{StaticResource SegCell}" Uid="1" BorderThickness="1" BorderBrush="Transparent"
+                              PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="ScaleClick">
+                        <TextBlock x:Name="ScaleText1" Text="115%" FontSize="12" Foreground="#8FA6B8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <Border x:Name="ScaleCell2" Style="{StaticResource SegCell}" Uid="2" BorderThickness="1" BorderBrush="Transparent"
+                              PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="ScaleClick">
+                        <TextBlock x:Name="ScaleText2" Text="130%" FontSize="12" Foreground="#8FA6B8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <Border x:Name="ScaleCell3" Style="{StaticResource SegCell}" Uid="3" BorderThickness="1" BorderBrush="Transparent"
+                              PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="ScaleClick">
+                        <TextBlock x:Name="ScaleText3" Text="150%" FontSize="12" Foreground="#8FA6B8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                    </UniformGrid>
+                  </Border>
+                </Grid>
+
+                <TextBlock Text="连接行为" FontSize="11" Foreground="#7C93A6" Margin="0,12,0,10" />
+
+                <Grid Height="56">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="空闲自动断开" FontSize="13" Foreground="#DCE9F3" />
+                    <TextBlock Text="空闲超时后释放蓝牙连接；调到 300 s 表示不自动断开" FontSize="11" Foreground="#6F8698" Margin="0,5,0,0" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Slider x:Name="IdleSlider" Width="166" Minimum="5" Maximum="300" Value="30"
+                            TickFrequency="5" IsSnapToTickEnabled="True" Style="{StaticResource GlassSlider}"
+                            ValueChanged="IdleChanged" />
+                    <TextBlock x:Name="IdleVal" Text="30 s" Width="88" Margin="12,0,0,0" TextAlignment="Right" FontSize="12"
+                               Foreground="#DCE9F3" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+                <Border Height="1" Background="#0FFFFFFF" />
+
+                <Grid Height="56">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="状态轮询间隔" FontSize="13" Foreground="#DCE9F3" />
+                    <TextBlock Text="调低更灵敏，但会增加蓝牙占用与丢帧风险" FontSize="11" Foreground="#6F8698" Margin="0,5,0,0" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Slider x:Name="PollSlider" Width="166" Minimum="300" Maximum="2000" Value="500"
+                            TickFrequency="50" IsSnapToTickEnabled="True" Style="{StaticResource GlassSlider}"
+                            ValueChanged="PollChanged" />
+                    <TextBlock x:Name="PollVal" Text="500 ms" Width="88" Margin="12,0,0,0" TextAlignment="Right" FontSize="12"
+                               Foreground="#DCE9F3" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+                <Border Height="1" Background="#0FFFFFFF" />
+
+                <Grid Height="88">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="目标设备" FontSize="13" Foreground="#DCE9F3" />
+                    <TextBlock x:Name="BindDesc" Text="自动扫描首个 JOMOO_SMART 设备" FontSize="11" Foreground="#6F8698" Margin="0,5,0,0" />
+                  </StackPanel>
+                  <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Border HorizontalAlignment="Right" Width="150" Height="30" CornerRadius="10" Background="#0CFFFFFF"
+                            BorderThickness="1" BorderBrush="#12FFFFFF" Padding="3">
+                      <UniformGrid Rows="1" Columns="2">
+                        <Border x:Name="BindAutoCell" Style="{StaticResource SegCell}" BorderThickness="1" BorderBrush="Transparent"
+                                PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="BindAutoClick">
+                          <TextBlock x:Name="BindAutoText" Text="自动" FontSize="12" Foreground="#8FA6B8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <Border x:Name="BindMacCell" Style="{StaticResource SegCell}" BorderThickness="1" BorderBrush="Transparent"
+                                PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="BindMacClick">
+                          <TextBlock x:Name="BindMacText" Text="指定" FontSize="12" Foreground="#8FA6B8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                      </UniformGrid>
+                    </Border>
+                    <Border x:Name="TargetBox" Width="268" Height="30" CornerRadius="9" Background="#0FFFFFFF" BorderThickness="1"
+                            BorderBrush="#14FFFFFF" Margin="0,8,0,0" Cursor="Hand"
+                            PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="TargetBoxClick">
+                      <Grid Margin="10,0,8,0">
+                        <TextBlock x:Name="TargetText" Text="未指定 · 点此选择设备" FontSize="12" Foreground="#8FA6B8"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <Path Data="M 0,0 L 5,5 L 10,0" Stroke="#7C93A6" StrokeThickness="1.2" Width="10" Height="5"
+                              HorizontalAlignment="Right" VerticalAlignment="Center" />
+                      </Grid>
+                    </Border>
+                  </StackPanel>
+                </Grid>
+
+                <TextBlock Text="诊断" FontSize="11" Foreground="#7C93A6" Margin="0,12,0,10" />
+
+                <Grid Height="56">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="日志记录" FontSize="13" Foreground="#DCE9F3" />
+                    <TextBlock Text="记录连接、指令与异常，排查时提供给开发者" FontSize="11" Foreground="#6F8698" Margin="0,5,0,0" />
+                  </StackPanel>
+                  <Grid Width="42" Height="22" HorizontalAlignment="Right" VerticalAlignment="Center" Cursor="Hand"
+                        PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="LogToggleClick">
+                    <Border x:Name="LogTrack" Width="40" Height="20" CornerRadius="10" Background="#22FFFFFF"
+                            BorderThickness="1" BorderBrush="#1FFFFFFF">
+                      <Ellipse x:Name="LogKnob" Width="14" Height="14" Fill="#7C93A6" HorizontalAlignment="Left" Margin="2,0,0,0" />
+                    </Border>
+                  </Grid>
+                </Grid>
+                <Border Height="1" Background="#0FFFFFFF" />
+
+                <Grid Height="56">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="日志目录" FontSize="13" Foreground="#DCE9F3" />
+                    <TextBlock x:Name="LogDirText" Text="%APPDATA%\JomooRemote\logs" FontSize="11" Foreground="#6F8698"
+                               Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <Border HorizontalAlignment="Right" VerticalAlignment="Center" Width="76" Height="30" CornerRadius="9"
+                          Background="#0FFFFFFF" BorderThickness="1" BorderBrush="#1FFFFFFF" Cursor="Hand"
+                          PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="OpenLogDirClick">
+                    <TextBlock Text="打开目录" FontSize="12" Foreground="#C9D8E4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                </Grid>
+
+                <TextBlock x:Name="SettingsHint" Text="" FontSize="11" Foreground="#7C93A6" Margin="0,6,0,0" MinHeight="16" />
+              </StackPanel>
+
+              <Grid Grid.Row="2" Margin="24,0,24,0">
+                <Border Height="1" Background="#0FFFFFFF" VerticalAlignment="Top" />
+                <Border x:Name="ResetButton" Style="{StaticResource PanelBtn}" HorizontalAlignment="Left" VerticalAlignment="Center"
+                        PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="ResetSettingsClick">
+                  <TextBlock Text="恢复默认" FontSize="12" Foreground="#C9D8E4" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                  <Border Style="{StaticResource PanelBtn}" Margin="0,0,10,0"
+                          PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="CancelSettingsClick">
+                    <TextBlock Text="取消" FontSize="12" Foreground="#C9D8E4" VerticalAlignment="Center" />
+                  </Border>
+                  <Border Style="{StaticResource PanelBtn}" Background="#1757C8FF" BorderBrush="#3D57C8FF"
+                          PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="SaveSettingsClick">
+                    <TextBlock Text="保存" FontSize="12" Foreground="#BFE6FB" VerticalAlignment="Center" />
+                  </Border>
+                </StackPanel>
+              </Grid>
+            </Grid>
+          </Border>
+
+          <Border x:Name="DeviceSheet" Visibility="Collapsed" Width="420" CornerRadius="16" Background="#FF0A1119"
+                  BorderThickness="1" BorderBrush="#2EFFFFFF" Padding="18,14" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel>
+              <TextBlock Text="选择目标设备" FontSize="13" Foreground="#DCE9F3" />
+              <TextBlock x:Name="ScanState" Text="扫描中…" FontSize="11" Foreground="#6F8698" Margin="0,6,0,10" />
+              <StackPanel x:Name="DevicesList" />
+              <Border HorizontalAlignment="Right" Margin="0,12,0,0" Style="{StaticResource PanelBtn}" Height="32"
+                      PreviewMouseLeftButtonDown="TileDown" MouseLeftButtonUp="DeviceSheetCancelClick">
+                <TextBlock Text="取消" FontSize="12" Foreground="#C9D8E4" VerticalAlignment="Center" />
+              </Border>
+            </StackPanel>
+          </Border>
+        </Grid>
       </Grid>
 
       <Popup x:Name="FaultPopup" PlacementTarget="{Binding ElementName=FaultCell}" Placement="Bottom"
@@ -512,5 +810,5 @@
         </Border>
       </Popup>
     </Grid>
-  </Border>
+  </Grid>
 </Window>

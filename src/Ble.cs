@@ -26,6 +26,10 @@ namespace JomooRemote
         /// <summary>设备码（广播厂商数据里的 jmZtmxm），未识别为 0</summary>
         public int DeviceCode;
 
+        /// <summary>界面设置里指定了 MAC 时，只认这个地址</summary>
+        public bool BindMac;
+        public ulong BindAddress;
+
         BluetoothLEDevice _dev;
         GattCharacteristic _chr;
         GattDeviceService _svc;
@@ -110,7 +114,10 @@ namespace JomooRemote
             watcher.Received += (s, e) =>
             {
                 var n = e.Advertisement.LocalName;
-                if (found == 0 && !string.IsNullOrEmpty(n) && n.StartsWith(NamePrefix))
+                bool hit = BindMac
+                    ? e.BluetoothAddress == BindAddress
+                    : (!string.IsNullOrEmpty(n) && n.StartsWith(NamePrefix));
+                if (found == 0 && hit)
                 {
                     found = e.BluetoothAddress;
                     name = n;
@@ -168,7 +175,39 @@ namespace JomooRemote
                     await Task.Delay(1500);
                 }
             }
+
+            if (BindMac)
+            {
+                Log("指定 MAC " + AppSettings.MacText(BindAddress) + " 未扫描到，回落到自动扫描");
+                BindMac = false;
+                ulong fallback = await ScanAsync(8000);
+                if (fallback != 0 && await OpenAsync(fallback)) return true;
+            }
+
             return false;
+        }
+
+        /// <summary>设置面板用：扫一轮，列出所有 JOMOO_SMART 设备的广播名与 MAC</summary>
+        public static async Task<List<(string Name, string Mac, ulong Address, short Rssi)>> ScanAllAsync(int ms)
+        {
+            var hits = new List<(string, string, ulong, short)>();
+            var seen = new HashSet<ulong>();
+            var watcher = new BluetoothLEAdvertisementWatcher
+            {
+                ScanningMode = BluetoothLEScanningMode.Active
+            };
+            watcher.Received += (s, e) =>
+            {
+                var n = e.Advertisement.LocalName;
+                if (!string.IsNullOrEmpty(n) && n.StartsWith(NamePrefix) && seen.Add(e.BluetoothAddress))
+                {
+                    hits.Add((n, AppSettings.MacText(e.BluetoothAddress), e.BluetoothAddress, (short)e.RawSignalStrengthInDBm));
+                }
+            };
+            watcher.Start();
+            await Task.Delay(ms);
+            watcher.Stop();
+            return hits;
         }
 
         async Task<bool> OpenAsync(ulong addr)
